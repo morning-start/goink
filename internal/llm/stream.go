@@ -98,7 +98,9 @@ func (c *Client) ChatStream(
 			return
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ChatURL, bytes.NewReader(body))
+		// ChatURL 按 base URL 语义存储，请求端点在此派生（/chat/completions）。
+		// 旧配置里保存的完整端点经 DeriveChatEndpoint 幂等处理后同样可用。
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, DeriveChatEndpoint(p.ChatURL), bytes.NewReader(body))
 		if err != nil {
 			ch <- StreamEvent{Type: EventError, Error: fmt.Errorf("failed to create HTTP request: %w", err)}
 			return

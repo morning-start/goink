@@ -2,6 +2,10 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { llm } from "@/lib/wailsjs/go/models";
+import {
+  formatContextWindow,
+  parseContextWindow,
+} from "@/utils/contextWindow";
 
 interface Props {
   model: llm.ModelInfo;
@@ -20,6 +24,27 @@ export default function ModelEditForm({
 }: Props) {
   const { t } = useTranslation();
   const [error, setError] = useState("");
+  // 上下文长度以字符串编辑（支持 "128K"/"1M"），
+  // 输入过程中不回写 model.context_window，避免半截输入被 parseInt 破坏；
+  // 解析成功才同步回 model，保证 "1M" 这类输入可见且可编辑。
+  const [contextDraft, setContextDraft] = useState(() =>
+    formatContextWindow(model.context_window),
+  );
+  const [contextError, setContextError] = useState("");
+
+  // 解析草稿并回写 model.context_window。返回是否合法。
+  const commitContextDraft = (): boolean => {
+    const parsed = parseContextWindow(contextDraft);
+    if (!parsed.ok) {
+      setContextError(parsed.error);
+      return false;
+    }
+    setContextError("");
+    onChange({ context_window: parsed.tokens });
+    // 回显规范化值（1048576 → "1M"）
+    setContextDraft(formatContextWindow(parsed.tokens));
+    return true;
+  };
 
   const handleSave = () => {
     if (!model.id.trim()) {
@@ -30,8 +55,10 @@ export default function ModelEditForm({
       setError(t("settings.modelNameRequired"));
       return;
     }
-    if (!model.context_window || model.context_window <= 0) {
-      setError(t("settings.contextWindowPositive"));
+    // 提交前解析上下文长度，非法则拦截（与后端 ParseContextWindow 同规则）
+    const parsed = parseContextWindow(contextDraft);
+    if (!parsed.ok) {
+      setContextError(parsed.error);
       return;
     }
     if (!model.max_output_tokens || model.max_output_tokens <= 0) {
@@ -39,6 +66,8 @@ export default function ModelEditForm({
       return;
     }
     setError("");
+    setContextError("");
+    onChange({ context_window: parsed.tokens });
     onSave();
   };
 
@@ -86,15 +115,18 @@ export default function ModelEditForm({
             {t("settings.contextWindow")}
           </label>
           <input
-            type="number"
-            value={model.context_window || ""}
-            onChange={(e) =>
-              handleChange({
-                context_window: parseInt(e.target.value, 10) || 0,
-              })
-            }
+            value={contextDraft}
+            onChange={(e) => {
+              setContextDraft(e.target.value);
+              setContextError("");
+            }}
+            onBlur={commitContextDraft}
+            placeholder={t("settings.contextWindowPlaceholder")}
             className="w-full h-8 rounded-md border bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           />
+          {contextError && (
+            <div className="text-xs text-red-500 mt-0.5">{contextError}</div>
+          )}
         </div>
         <div>
           <label className="text-xs text-muted-foreground mb-0.5 block">

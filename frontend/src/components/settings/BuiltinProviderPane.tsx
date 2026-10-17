@@ -3,6 +3,7 @@ import { Globe, ExternalLink, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import type { llm } from "@/lib/wailsjs/go/models";
+import { formatContextWindow } from "@/utils/contextWindow";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderIcon from "./ProviderIcon";
 import ProviderFormFields from "./ProviderFormFields";
@@ -176,10 +177,7 @@ export default function BuiltinProviderPane({
               >
                 <span className="text-sm">{m.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {m.context_window >= 1_000_000
-                    ? (m.context_window / 1_000_000).toFixed(0) + "M"
-                    : (m.context_window / 1_000).toFixed(0) + "K"}{" "}
-                  {t("settings.context")}
+                  {formatContextWindow(m.context_window)} {t("settings.context")}
                   {m.max_output_tokens > 0 && (
                     <>
                       {" "}

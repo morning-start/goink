@@ -39,7 +39,8 @@ func (c *Client) GenerateText(
 		return "", fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ChatURL, bytes.NewReader(body))
+	// ChatURL 按 base URL 语义存储，请求端点在此派生（与 ChatStream 一致）。
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, DeriveChatEndpoint(p.ChatURL), bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTTP request: %w", err)
 	}

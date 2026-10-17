@@ -1,6 +1,7 @@
 import { X, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { llm } from "@/lib/wailsjs/go/models";
+import { formatContextWindow } from "@/utils/contextWindow";
 import TemperatureInfo from "./TemperatureInfo";
 import TestResultWithHint from "./TestResultWithHint";
 
@@ -50,7 +51,7 @@ export default function ProviderFormFields({
 
   return (
     <>
-      {/* Chat URL */}
+      {/* Base URL */}
       <div className="flex items-center gap-3">
         <label className="text-xs text-muted-foreground w-16 shrink-0">
           {t("settings.chatUrl")}
@@ -58,6 +59,7 @@ export default function ProviderFormFields({
         <input
           value={provider.chat_url}
           onChange={(e) => onUpdate(selectedKey, { chat_url: e.target.value })}
+          placeholder={t("settings.baseUrlPlaceholder")}
           className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         />
       </div>
@@ -134,9 +136,7 @@ export default function ProviderFormFields({
                   {(m.context_window > 0 || m.max_output_tokens > 0) && (
                     <span className="text-xs text-muted-foreground ml-2">
                       {m.context_window > 0 &&
-                        (m.context_window >= 1_000_000
-                          ? (m.context_window / 1_000_000).toFixed(0) + "M"
-                          : (m.context_window / 1_000).toFixed(0) + "K")}
+                        formatContextWindow(m.context_window)}
                       {m.max_output_tokens > 0 && (
                         <>
                           {" "}

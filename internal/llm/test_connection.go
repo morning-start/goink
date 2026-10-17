@@ -32,7 +32,7 @@ type TestConnectionResult struct {
 // expandChatURLCandidates 生成候选 URL 列表，用于多层 fallback 真测。
 // 顺序（按可能性从高到低）：
 //  1. 原样（用户填的完整端点，如 https://x.com/proxy/chat）
-//  2. + /chat/completions（base URL，如 https://api.deepseek.com/v1）
+//  2. base URL + /chat/completions（用户填 base URL，最常见的正确情况）
 //  3. + /v1/chat/completions（裸域名，如 https://1024token.club）
 //  4. 去掉末尾 /chat/completions 再补 /v1/chat/completions（用户填 /v1/chat/completions 但实际端点是 /v1 的变体）
 //  5. 去掉末尾 /v1/chat/completions 再补 /chat/completions（反向情况）
@@ -61,9 +61,11 @@ func expandChatURLCandidates(raw string) []string {
 
 	// 1. 原样（假设是完整端点）
 	add(raw)
-	// 2. + /chat/completions（假设是 base URL）
+	// 2. base URL + /chat/completions（假设是 base URL，这是用户只填 base URL 时的主路径）
+	//    这里做字面拼接而非 DeriveChatEndpoint：裸域名的 /v1 补全由第 3 档负责，
+	//    保留「根路径 + /chat/completions」这一兜底（少数服务端点不带 /v1）。
 	if !strings.HasSuffix(raw, "/chat/completions") {
-		add(raw + "/chat/completions")
+		add(raw + chatCompletionsPath)
 	}
 	// 3. + /v1/chat/completions（仅在裸域名时，避免对带版本号的路径误补 /v1）
 	//    用 net/url 判断 u.Path == ""，比 strings.Contains 更语义化
@@ -85,8 +87,8 @@ func expandChatURLCandidates(raw string) []string {
 	//    无视用户填的路径，直接用 host 拼 /v1/chat/completions
 	//    仅在前面所有候选都失败时才试，不会误伤填对的情况
 	//    裸域名时与第 3 档重复，add 会去重
-	if u, err := url.Parse(raw); err == nil && u.Host != "" {
-		add(u.Scheme + "://" + u.Host + "/v1/chat/completions")
+	if host := hostOf(raw); host != "" {
+		add(host + "/v1/chat/completions")
 	}
 
 	return candidates

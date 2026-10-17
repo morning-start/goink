@@ -157,9 +157,10 @@ func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
 // ToUserConfig 将前端视图转换回可持久化的 UserLLMConfig。
 // 只保留有 APIKey 的 provider，无 key 的不写入（内置模板由 Merge 自动提供）。
 //
-// 保存用户填的 URL 原值，不再 normalizeURL：
-//   - 保存前前端已通过 TestConnection 验证 URL，并把探测到的正确 URL 回写到 pv.ChatURL
-//   - 二次 normalizeURL 会破坏已验证的 URL（测试和保存不一致）
+// ChatURL 按 base URL 语义保存（如 https://api.deepseek.com/v1），
+// 到 /chat/completions 的补全在请求时由 DeriveChatEndpoint 完成：
+//   - 保存前前端已通过 TestConnection 验证可达性，并回写探测到的端点
+//   - 这里不做二次规范化：DeriveChatEndpoint 幂等，能正确处理已保存的值
 //   - 内置 provider 用户未改 URL 时留空，由 Merge 用 bp.ChatURL 兜底
 func (v *LLMConfigView) ToUserConfig() *UserLLMConfig {
 	providers := make([]Provider, 0, len(v.Providers))

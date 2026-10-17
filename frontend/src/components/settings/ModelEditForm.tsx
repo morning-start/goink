@@ -5,6 +5,7 @@ import type { llm } from "@/lib/wailsjs/go/models";
 import {
   formatContextWindow,
   parseContextWindow,
+  type ContextWindowErrorCode,
 } from "@/utils/contextWindow";
 
 interface Props {
@@ -32,11 +33,18 @@ export default function ModelEditForm({
   );
   const [contextError, setContextError] = useState("");
 
+  // 把解析错误码翻译为当前语言的提示文案。
+  // 解析器只返回错误码，文案在 i18n 里，避免 .ts 源文件硬编码中文（i18n:check）。
+  const contextErrorMessage = (
+    code: ContextWindowErrorCode,
+    detail?: string,
+  ): string => t(`settings.contextWindowError.${code}`, { detail });
+
   // 解析草稿并回写 model.context_window。返回是否合法。
   const commitContextDraft = (): boolean => {
     const parsed = parseContextWindow(contextDraft);
     if (!parsed.ok) {
-      setContextError(parsed.error);
+      setContextError(contextErrorMessage(parsed.code, parsed.detail));
       return false;
     }
     setContextError("");
@@ -55,10 +63,10 @@ export default function ModelEditForm({
       setError(t("settings.modelNameRequired"));
       return;
     }
-    // 提交前解析上下文长度，非法则拦截（与后端 ParseContextWindow 同规则）
+    // 提交前解析上下文长度，非法则拦截
     const parsed = parseContextWindow(contextDraft);
     if (!parsed.ok) {
-      setContextError(parsed.error);
+      setContextError(contextErrorMessage(parsed.code, parsed.detail));
       return;
     }
     if (!model.max_output_tokens || model.max_output_tokens <= 0) {

@@ -1,18 +1,35 @@
-// 上下文长度解析：与 Go 端 internal/llm/size.go 的 ParseContextWindow 保持同一套规则。
+// 上下文长度的解析与回显。
 //
-// 进位规则（与按 1000 进位的普通数字不同）：
+// 进位规则（与文件大小等按 1000 进位的「普通数字」不同）：
 //   - K = 1024
 //   - M = 1024 * 1024 = 1,048,576
 //   - G = 1024 * 1024 * 1024
 //
 // 用户只填纯数字时不套用任何单位换算，该数字即最终的上下文长度。
-// 前端做即时校验与回显，后端在保存时仍会以同一规则解析，两者必须一致。
+//
+// 本模块是上下文长度字符串的唯一解析方：解析出的整数由表单写入
+// llm.ModelInfo.context_window，后端只接收解析好的数值，不再解析字符串。
+//
+// 错误以错误码返回（见 ContextWindowErrorCode），文案由调用方用 t() 翻译，
+// 避免在 .ts 源文件里硬编码中文（i18n:check 会校验）。
 
 const UNIT_K = 1024;
 const UNIT_M = 1024 * 1024;
 const UNIT_G = 1024 * 1024 * 1024;
 
-const MAX_TOKENS = 2147483647; // int32 上限，与 Go 端一致
+const MAX_TOKENS = 2147483647; // int32 上限
+
+/** 上下文长度解析失败的原因码，对应 settings.contextWindowError.* 的 i18n key。 */
+export type ContextWindowErrorCode =
+  | "empty"
+  | "invalid"
+  | "notPositive"
+  | "unknownUnit"
+  | "tooLarge";
+
+export type ParseContextWindowResult =
+  | { ok: true; tokens: number }
+  | { ok: false; code: ContextWindowErrorCode; /** 插入文案的变量：非法输入原文或单位 */ detail?: string };
 
 /**
  * 把用户输入的上下文长度字符串解析为 token 数。
@@ -20,50 +37,40 @@ const MAX_TOKENS = 2147483647; // int32 上限，与 Go 端一致
  * 支持：`200000`（纯数字原样）、`128K`、`1M`、`1.5M`、`128Ki`、`1MiB`、
  * `128 K`（容忍空格），大小写不敏感。
  *
- * 解析失败返回 `{ ok: false, error }`，不抛异常，便于表单直接展示错误。
+ * 解析失败返回错误码，不抛异常，便于表单直接展示。数字与单位用显式
+ * 正则拆分，避免把科学计数法（`1e5`）当作有效输入。
  */
-export function parseContextWindow(
-  input: string,
-): { ok: true; tokens: number } | { ok: false; error: string } {
+export function parseContextWindow(input: string): ParseContextWindowResult {
   const raw = (input ?? "").trim();
   if (!raw) {
-    return { ok: false, error: "上下文长度不能为空" };
+    return { ok: false, code: "empty" };
   }
 
   // 去掉数字与单位之间的空白，并统一大写
   const s = raw.replace(/\s+/g, "").toUpperCase();
 
-  // 拆出数字部分与单位部分
+  // 拆出数字部分与单位部分（数字只接受十进制小数）
   const match = /^([0-9]*\.?[0-9]+)([A-Z]*)$/.exec(s);
   if (!match) {
-    return {
-      ok: false,
-      error: `无法识别上下文长度「${input}」，请输入如 128K、1M 或纯数字`,
-    };
+    return { ok: false, code: "invalid", detail: input };
   }
 
   const value = Number(match[1]);
   if (!Number.isFinite(value)) {
-    return {
-      ok: false,
-      error: `无法识别上下文长度「${input}」，请输入如 128K、1M 或纯数字`,
-    };
+    return { ok: false, code: "invalid", detail: input };
   }
   if (value <= 0) {
-    return { ok: false, error: "上下文长度必须大于 0" };
+    return { ok: false, code: "notPositive" };
   }
 
   const multiplier = unitMultiplier(match[2]);
   if (multiplier === null) {
-    return {
-      ok: false,
-      error: `无法识别单位「${match[2]}」，可用 K、M、G 或纯数字`,
-    };
+    return { ok: false, code: "unknownUnit", detail: match[2] };
   }
 
   const tokens = Math.round(value * multiplier);
   if (tokens > MAX_TOKENS) {
-    return { ok: false, error: `上下文长度「${input}」过大` };
+    return { ok: false, code: "tooLarge", detail: input };
   }
 
   return { ok: true, tokens };

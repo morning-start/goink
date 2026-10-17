@@ -15,7 +15,7 @@ import (
 // 同时用作用户配置的 JSON 格式（Hooks 不参与序列化，反序列化后为 nil）。
 type Provider struct {
 	Name         string                                                            `json:"name"`                  // 供应商名称，如 "DeepSeek"
-	ChatURL      string                                                            `json:"chat_url"`              // 聊天补全端点
+	ChatURL      string                                                            `json:"chat_url"`              // base URL，请求端点由 DeriveChatEndpoint 派生
 	APIKey       string                                                            `json:"api_key,omitempty"`     // API 密钥
 	PlatformURL  string                                                            `json:"-"`                     // 注册平台 URL，仅内置模板使用
 	HelpText     string                                                            `json:"-"`                     // 注册引导文字，仅内置模板使用

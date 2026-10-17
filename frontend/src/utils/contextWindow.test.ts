@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatContextWindow, parseContextWindow } from "./contextWindow";
 
-// 这些用例与 Go 端 internal/llm/size_test.go 的 TestParseContextWindow 对齐，
-// 保证前后端解析规则一致（前端即时校验、后端保存时再解析）。
+// 进位规则：K/M/G 按 1024 二进制进位；纯数字不做换算，即最终 token 数。
 
 describe("parseContextWindow", () => {
   it("纯数字原样使用，不做单位换算", () => {
@@ -47,25 +46,36 @@ describe("parseContextWindow", () => {
     expect(parseContextWindow("1MiB")).toEqual({ ok: true, tokens: 1048576 });
   });
 
-  it("拒绝非法输入", () => {
-    for (const bad of [
-      "",
-      "   ",
-      "K",
-      "M",
-      "abc",
-      "128T",
-      "0",
-      "0K",
-      "-1K",
-      "1e5", // 科学计数法
-      "128B", // B 不是 token 单位
-      "128KB",
-    ]) {
-      expect(parseContextWindow(bad).ok, `expected rejection for ${bad}`).toBe(
-        false,
-      );
+  it("空输入返回 empty 错误码", () => {
+    expect(parseContextWindow("")).toEqual({ ok: false, code: "empty" });
+    expect(parseContextWindow("   ")).toEqual({ ok: false, code: "empty" });
+  });
+
+  it("非法格式返回 invalid 错误码并带回原文", () => {
+    for (const bad of ["K", "M", "abc", "128T", "1e5", "128B", "128KB"]) {
+      const result = parseContextWindow(bad);
+      expect(result.ok, `expected rejection for ${bad}`).toBe(false);
+      if (!result.ok) {
+        // 字母单位会被先识别为 unknownUnit，纯字母则无数字部分
+        expect(["invalid", "unknownUnit"]).toContain(result.code);
+      }
     }
+  });
+
+  it("非正数返回 notPositive 错误码", () => {
+    expect(parseContextWindow("0")).toEqual({ ok: false, code: "notPositive" });
+    expect(parseContextWindow("0K")).toEqual({
+      ok: false,
+      code: "notPositive",
+    });
+  });
+
+  it("超出 int32 上限返回 tooLarge 错误码", () => {
+    expect(parseContextWindow("99999G")).toEqual({
+      ok: false,
+      code: "tooLarge",
+      detail: "99999G",
+    });
   });
 });
 
